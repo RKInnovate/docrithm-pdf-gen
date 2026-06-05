@@ -1,0 +1,7 @@
+Roboto is licensed under the Apache License, Version 2.0.
+https://www.apache.org/licenses/LICENSE-2.0
+
+The Roboto-*.ttf files in this directory are the fonts bundled with the
+`pdfmake` npm package, with their GSUB (ligature) table removed so the
+generated PDF text layer maps 1:1 to Unicode. See
+scripts/strip-roboto-ligatures.sh for the exact, reproducible steps.

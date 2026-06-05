@@ -69,33 +69,49 @@ const ROBOTO_FILES = {
   bolditalics: 'Roboto-MediumItalic.ttf',
 };
 
-// On-disk directory of the vendored Noto Sans Devanagari TTFs the
-// bilingual (en + hi) layout needs. Committed so a fresh clone renders
-// the bilingual layout without network access.
-const DEVANAGARI_TTF_DIR = path.resolve(__dirname, '..', 'assets', 'fonts');
+// On-disk directory of the vendored TTFs: the ligature-stripped Roboto
+// family (see resolveRobotoFonts) plus Noto Sans Devanagari for the
+// bilingual layout. Committed so a fresh clone renders without network
+// access and with a clean text layer.
+const FONT_DIR = path.resolve(__dirname, '..', 'assets', 'fonts');
 
 /**
- * Resolve the four Roboto font sources pdfmake ships with itself, in a
- * shape suitable for `new PdfPrinter({ Roboto: ... })`.
+ * Resolve the four Roboto font sources, in a shape suitable for
+ * `new PdfPrinter({ Roboto: ... })`.
  *
- * pdfmake@0.2.x embeds Roboto as base64 inside `build/vfs_fonts.js`;
- * PdfPrinter font descriptors accept Buffers, so we decode the VFS once
- * and hand pdfmake Buffers directly. A raw-TTF fast path is tried first
- * for forward-compat with a hypothetical future pdfmake that ships TTFs.
+ * We prefer the vendored Roboto TTFs in assets/fonts/, which have had
+ * their GSUB table removed. Why: pdfmake's bundled Roboto carries a
+ * `liga` (fi/fl/ff…) ligature table — it renders those ligatures
+ * correctly on the page but emits a broken ToUnicode mapping for the
+ * ligature glyphs, so the PDF *text layer* reads "Ofce"/"Refned" even
+ * though the page shows "Office"/"Refined". That corrupts copy-paste,
+ * pdftotext, and any text-layer consumer. Stripping GSUB means every
+ * glyph maps 1:1 to its codepoint, so the text layer matches the page.
+ * (Regenerate the stripped TTFs with scripts/strip-roboto-ligatures.sh.)
+ *
+ * Falls back to pdfmake's base64 VFS Roboto when the vendored files are
+ * absent — that path renders fine but reintroduces the text-layer quirk,
+ * so we warn rather than fail.
  *
  * @returns {{normal:Buffer|string,bold:Buffer|string,italics:Buffer|string,bolditalics:Buffer|string}}
  */
 function resolveRobotoFonts() {
-  try {
-    return {
-      normal: require.resolve(`pdfmake/examples/fonts/${ROBOTO_FILES.normal}`),
-      bold: require.resolve(`pdfmake/examples/fonts/${ROBOTO_FILES.bold}`),
-      italics: require.resolve(`pdfmake/examples/fonts/${ROBOTO_FILES.italics}`),
-      bolditalics: require.resolve(`pdfmake/examples/fonts/${ROBOTO_FILES.bolditalics}`),
-    };
-  } catch {
-    /* fall through to VFS */
+  const local = {
+    normal: path.join(FONT_DIR, ROBOTO_FILES.normal),
+    bold: path.join(FONT_DIR, ROBOTO_FILES.bold),
+    italics: path.join(FONT_DIR, ROBOTO_FILES.italics),
+    bolditalics: path.join(FONT_DIR, ROBOTO_FILES.bolditalics),
+  };
+  // PdfPrinter accepts file-path strings as font sources.
+  if (Object.values(local).every((p) => fs.existsSync(p))) {
+    return local;
   }
+  console.warn(
+    'docrithm-pdf-gen: vendored ligature-stripped Roboto not found in '
+      + `${FONT_DIR}; falling back to pdfmake's bundled Roboto. The page `
+      + 'will render correctly but the text layer will drop fi/fl. Run '
+      + 'scripts/strip-roboto-ligatures.sh to restore a clean text layer.',
+  );
 
   let vfs;
   try {
@@ -143,15 +159,15 @@ function resolveRobotoFonts() {
  * @returns {?{normal:string,bold:string,italics:string,bolditalics:string}}
  */
 function resolveDevanagariFonts() {
-  const regular = path.join(DEVANAGARI_TTF_DIR, 'NotoSansDevanagari-Regular.ttf');
-  const bold = path.join(DEVANAGARI_TTF_DIR, 'NotoSansDevanagari-Bold.ttf');
+  const regular = path.join(FONT_DIR, 'NotoSansDevanagari-Regular.ttf');
+  const bold = path.join(FONT_DIR, 'NotoSansDevanagari-Bold.ttf');
   try {
     fs.accessSync(regular);
     fs.accessSync(bold);
     return { normal: regular, bold, italics: regular, bolditalics: bold };
   } catch {
     console.warn(
-      `docrithm-pdf-gen: NotoSansDevanagari TTFs not found in ${DEVANAGARI_TTF_DIR}. `
+      `docrithm-pdf-gen: NotoSansDevanagari TTFs not found in ${FONT_DIR}. `
         + `Bilingual layout will fall back to Roboto (Devanagari glyphs appear as boxes).`,
     );
     return null;
