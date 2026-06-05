@@ -1,0 +1,62 @@
+{
+  "_meta": {
+    "purpose": "Line-item product catalogue. Drives random line-item selection in src/generators/orders.js and the printed item rows + HSN-wise tax summary in src/templates/*.js. Adding a product here is sufficient to surface it on generated PO/invoice PDFs; no template changes are required.",
+    "fields": {
+      "code": "stable item code (kebab/sku style). Treat as load-bearing — used in filenames is NOT done, but stable across runs for reproducibility.",
+      "description": "display description as printed in the item row. May be deliberately long for some entries to stress column wrapping.",
+      "hsn": "HSN/SAC code printed per line and grouped in the tax summary. India prints HSN on B2B invoices above turnover thresholds.",
+      "unit": "unit of measure printed in the Qty/UOM column. One of Nos | Kg | Box | Ltr | Set | Mtr | Pkt.",
+      "priceMin": "inclusive lower bound for the per-unit price sample (INR, pre-tax).",
+      "priceMax": "inclusive upper bound for the per-unit price sample (INR, pre-tax).",
+      "gstSlab": "applicable GST rate percentage. One of 0 | 5 | 12 | 18 | 28. Split evenly into CGST+SGST for intra-state or applied wholly as IGST for inter-state."
+    },
+    "notes": {
+      "gst_slabs": "Slabs reflect common Indian GST categories: 0% (unprocessed staples), 5% (essentials), 12% (processed goods), 18% (most industrial goods/services), 28% (luxury/sin). Assignments here are illustrative, not authoritative tax advice.",
+      "hsn_provenance": "HSN codes are plausible 4-8 digit values for the product family but are synthetic; do not treat as a real classification."
+    }
+  },
+  "items": [
+    { "code": "ms-bolt-m10", "description": "MS Hex Bolt M10 x 50mm, Grade 8.8, Zinc Plated", "hsn": "73181500", "unit": "Box", "priceMin": 180, "priceMax": 420, "gstSlab": 18 },
+    { "code": "ms-nut-m10", "description": "MS Hex Nut M10, Grade 8, Zinc Plated", "hsn": "73181600", "unit": "Box", "priceMin": 90, "priceMax": 240, "gstSlab": 18 },
+    { "code": "ss-washer-m10", "description": "SS304 Flat Washer M10", "hsn": "73182200", "unit": "Box", "priceMin": 60, "priceMax": 180, "gstSlab": 18 },
+    { "code": "copper-wire-2-5", "description": "Copper Flexible Wire 2.5 sq.mm, FR PVC Insulated, 90m Coil", "hsn": "85444909", "unit": "Box", "priceMin": 1800, "priceMax": 3200, "gstSlab": 18 },
+    { "code": "mcb-32a", "description": "MCB 32A Single Pole C-Curve, 10kA Breaking Capacity", "hsn": "85362020", "unit": "Nos", "priceMin": 210, "priceMax": 560, "gstSlab": 18 },
+    { "code": "led-panel-18w", "description": "LED Recessed Panel Light 18W 6500K Square, Aluminium Body", "hsn": "94054090", "unit": "Nos", "priceMin": 320, "priceMax": 780, "gstSlab": 12 },
+    { "code": "pvc-pipe-25", "description": "PVC Pipe 25mm Class 3, 6m Length, ISI Marked", "hsn": "39172390", "unit": "Nos", "priceMin": 140, "priceMax": 360, "gstSlab": 18 },
+    { "code": "cement-opc-53", "description": "OPC 53 Grade Cement, 50 Kg Bag", "hsn": "25232930", "unit": "Box", "priceMin": 360, "priceMax": 520, "gstSlab": 28 },
+    { "code": "tmt-bar-12mm", "description": "TMT Reinforcement Bar Fe500D 12mm, 12m Length", "hsn": "72142090", "unit": "Nos", "priceMin": 620, "priceMax": 980, "gstSlab": 18 },
+    { "code": "putty-wall-20kg", "description": "White Cement Wall Putty 20 Kg Bag, Water Resistant", "hsn": "32149090", "unit": "Box", "priceMin": 480, "priceMax": 760, "gstSlab": 18 },
+    { "code": "paint-emulsion-20l", "description": "Interior Acrylic Emulsion Paint 20 Ltr, Smooth Finish", "hsn": "32099090", "unit": "Ltr", "priceMin": 2400, "priceMax": 4600, "gstSlab": 28 },
+    { "code": "thinner-1l", "description": "NC Thinner 1 Ltr", "hsn": "38140010", "unit": "Ltr", "priceMin": 90, "priceMax": 210, "gstSlab": 18 },
+    { "code": "a4-paper-75gsm", "description": "A4 Copier Paper 75 GSM, 500 Sheets Ream", "hsn": "48025690", "unit": "Box", "priceMin": 240, "priceMax": 380, "gstSlab": 12 },
+    { "code": "ball-pen-blue", "description": "Ball Point Pen Blue 0.7mm, Pack of 10", "hsn": "96081019", "unit": "Pkt", "priceMin": 50, "priceMax": 130, "gstSlab": 18 },
+    { "code": "file-folder-fc", "description": "Foolscap Box File with Lever Clip", "hsn": "48201090", "unit": "Nos", "priceMin": 40, "priceMax": 110, "gstSlab": 18 },
+    { "code": "stapler-no10", "description": "Stapler No. 10 Metal Body with 1000 Pins", "hsn": "84729090", "unit": "Nos", "priceMin": 60, "priceMax": 160, "gstSlab": 18 },
+    { "code": "whiteboard-marker", "description": "Whiteboard Marker Assorted Colours, Pack of 4", "hsn": "96082000", "unit": "Pkt", "priceMin": 80, "priceMax": 200, "gstSlab": 18 },
+    { "code": "hand-sanitizer-5l", "description": "Alcohol Hand Sanitizer 70% IPA, 5 Ltr Can", "hsn": "38089400", "unit": "Ltr", "priceMin": 380, "priceMax": 720, "gstSlab": 18 },
+    { "code": "nitrile-gloves-l", "description": "Nitrile Examination Gloves Large, Box of 100, Powder Free", "hsn": "40151900", "unit": "Box", "priceMin": 320, "priceMax": 640, "gstSlab": 12 },
+    { "code": "face-mask-3ply", "description": "3-Ply Surgical Face Mask, Box of 50", "hsn": "63079090", "unit": "Box", "priceMin": 90, "priceMax": 240, "gstSlab": 12 },
+    { "code": "safety-helmet", "description": "Industrial Safety Helmet with Ratchet, ISI Marked, Yellow", "hsn": "65061010", "unit": "Nos", "priceMin": 180, "priceMax": 420, "gstSlab": 18 },
+    { "code": "safety-shoes-8", "description": "Steel Toe Safety Shoes Size 8, ISI Marked, Leather Upper", "hsn": "64034000", "unit": "Set", "priceMin": 1100, "priceMax": 2400, "gstSlab": 18 },
+    { "code": "cotton-waste-1kg", "description": "Cotton Waste Cleaning Rag, 1 Kg Pack", "hsn": "63109040", "unit": "Kg", "priceMin": 70, "priceMax": 160, "gstSlab": 5 },
+    { "code": "grease-mp3-1kg", "description": "Multipurpose Lithium Grease MP3, 1 Kg Tin", "hsn": "27101980", "unit": "Kg", "priceMin": 180, "priceMax": 420, "gstSlab": 18 },
+    { "code": "engine-oil-15w40", "description": "Diesel Engine Oil 15W-40 CI-4, 15 Ltr Pail", "hsn": "27101980", "unit": "Ltr", "priceMin": 2600, "priceMax": 4200, "gstSlab": 18 },
+    { "code": "welding-rod-3-15", "description": "MS Welding Electrode 3.15mm E6013, 5 Kg Box", "hsn": "83111000", "unit": "Box", "priceMin": 420, "priceMax": 780, "gstSlab": 18 },
+    { "code": "angle-grinder-4", "description": "Angle Grinder 4-inch 850W with Disc", "hsn": "84672900", "unit": "Nos", "priceMin": 1600, "priceMax": 3400, "gstSlab": 18 },
+    { "code": "drill-machine-13", "description": "Impact Drill Machine 13mm 650W, Variable Speed", "hsn": "84672100", "unit": "Nos", "priceMin": 2200, "priceMax": 4800, "gstSlab": 18 },
+    { "code": "measuring-tape-5m", "description": "Steel Measuring Tape 5m x 19mm, Auto Lock", "hsn": "90178000", "unit": "Nos", "priceMin": 90, "priceMax": 240, "gstSlab": 18 },
+    { "code": "spanner-set-8", "description": "Combination Spanner Set 8-pieces, Chrome Vanadium", "hsn": "82041110", "unit": "Set", "priceMin": 480, "priceMax": 1200, "gstSlab": 18 },
+    { "code": "rice-basmati-25kg", "description": "Basmati Rice 25 Kg Bag, Loose", "hsn": "10063020", "unit": "Kg", "priceMin": 1800, "priceMax": 2900, "gstSlab": 5 },
+    { "code": "wheat-flour-50kg", "description": "Wheat Flour (Atta) 50 Kg Bag", "hsn": "11010000", "unit": "Kg", "priceMin": 1400, "priceMax": 2200, "gstSlab": 0 },
+    { "code": "sugar-50kg", "description": "Refined Sugar M-30 Grade, 50 Kg Bag", "hsn": "17019990", "unit": "Kg", "priceMin": 1900, "priceMax": 2600, "gstSlab": 5 },
+    { "code": "tea-leaf-1kg", "description": "CTC Tea Leaf Premium Blend, 1 Kg Pack", "hsn": "09024020", "unit": "Kg", "priceMin": 220, "priceMax": 480, "gstSlab": 5 },
+    { "code": "refined-oil-15l", "description": "Refined Sunflower Oil 15 Ltr Tin, Edible Grade", "hsn": "15121110", "unit": "Ltr", "priceMin": 1900, "priceMax": 2800, "gstSlab": 5 },
+    { "code": "cotton-fabric-mtr", "description": "Cotton Shirting Fabric 100% Cotton, 58-inch Width, per Metre", "hsn": "52081200", "unit": "Mtr", "priceMin": 120, "priceMax": 340, "gstSlab": 5 },
+    { "code": "office-chair-mesh", "description": "Ergonomic Mesh Office Chair with Lumbar Support and Adjustable Armrest, Nylon Base, 120 Kg Capacity, 3-Year Warranty", "hsn": "94013000", "unit": "Nos", "priceMin": 4200, "priceMax": 9800, "gstSlab": 18 },
+    { "code": "laptop-bag-15", "description": "Laptop Backpack 15.6-inch, Water Resistant, USB Charging Port", "hsn": "42029200", "unit": "Nos", "priceMin": 600, "priceMax": 1800, "gstSlab": 18 },
+    { "code": "ups-600va", "description": "Line-Interactive UPS 600VA with AVR", "hsn": "85044090", "unit": "Nos", "priceMin": 2200, "priceMax": 4200, "gstSlab": 18 },
+    { "code": "ac-split-1-5t", "description": "Split Air Conditioner 1.5 Ton 3-Star Inverter, Copper Condenser", "hsn": "84151010", "unit": "Nos", "priceMin": 32000, "priceMax": 46000, "gstSlab": 28 },
+    { "code": "courier-charges", "description": "Outbound Courier & Freight Charges (Service)", "hsn": "996812", "unit": "Nos", "priceMin": 120, "priceMax": 900, "gstSlab": 18 },
+    { "code": "installation-svc", "description": "On-site Installation & Commissioning Service (per visit)", "hsn": "995461", "unit": "Nos", "priceMin": 800, "priceMax": 3500, "gstSlab": 18 }
+  ]
+}

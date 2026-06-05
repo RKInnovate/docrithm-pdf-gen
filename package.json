@@ -1,0 +1,26 @@
+{
+  "name": "docrithm-pdf-gen",
+  "version": "0.1.0",
+  "description": "Synthetic, multi-layout purchase-order (PO) and purchase-invoice (PI) PDF generator for stress-testing the DocRithm document-processing app. Produces realistic Indian B2B procurement documents (GSTIN, HSN, CGST/SGST/IGST, INR) across multiple fictitious vendors, buyers and visual layouts, with deliberate edge-case scenarios baked in as ground truth.",
+  "license": "MIT",
+  "author": "Ravindra Singh <ravindra@rkinnovate.com>",
+  "type": "module",
+  "main": "src/index.js",
+  "packageManager": "pnpm@9.10.0",
+  "bin": {
+    "docrithm-pdf-gen": "src/index.js"
+  },
+  "scripts": {
+    "generate": "node src/index.js",
+    "generate:smoke": "node src/index.js --count 30 --seed 42",
+    "generate:full": "node src/index.js --count 500 --seed 42",
+    "generate:repro": "node src/index.js --count 30 --seed 42 --now 2026-05-29T12:00:00Z --out-dir ./out-repro",
+    "lint": "find src -type f -name '*.js' -print0 | xargs -0 -n1 node --check"
+  },
+  "dependencies": {
+    "pdfmake": "^0.2.10"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
