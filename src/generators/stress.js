@@ -50,6 +50,35 @@
 import { createRng } from '../seedrand.js';
 import { distortLedger, distortStock } from '../adversarial.js';
 import { buildDocIds } from './orders.js';
+import { LAYOUT_KEYS } from '../layouts/index.js';
+
+/**
+ * Pick a layout key for a vendor *deterministically from its name*.
+ *
+ * Real-world vendors each print on their own fixed template, so the same
+ * party must always render with the same layout (consistency a learned
+ * extractor could otherwise lean on), while different parties spread
+ * across every available layout. We therefore hash the intended ledger
+ * master name (NOT the distorted shown text — distortions of one vendor
+ * must still land on that vendor's layout) into the LAYOUT_KEYS registry.
+ * This keeps stress runs deterministic without consuming `rng` draws,
+ * so adding layout variation does not shift any existing distortion
+ * stream for a given seed.
+ *
+ * @param {string} masterName - the canonical ledger master name
+ * @returns {string} a key from LAYOUT_KEYS
+ */
+function layoutForVendor(masterName) {
+  // FNV-1a-ish 32-bit string hash — stable across runs/platforms.
+  let h = 0x811c9dc5;
+  const s = String(masterName ?? '');
+  for (let i = 0; i < s.length; i += 1) {
+    h ^= s.charCodeAt(i);
+    h = Math.imul(h, 0x01000193);
+  }
+  const idx = (h >>> 0) % LAYOUT_KEYS.length;
+  return LAYOUT_KEYS[idx];
+}
 
 // 12 months of trailing history, in milliseconds (mirrors orders.js so
 // stress docs carry believable, in-range dates).
@@ -376,7 +405,11 @@ function planStressDoc({ rng, masters, docType, now, sequence, forced = {} }) {
     orderDate,
     dueDate,
     termDays,
-    layoutKey: 'clean-modern',
+    // Per-vendor consistent layout (see layoutForVendor): each real
+    // vendor prints on its own template, so the resolution-stress set
+    // now spreads across every layout too — exercising extraction (OCR,
+    // table shapes, bilingual labels) on top of the name distortions.
+    layoutKey: layoutForVendor(ledger.name),
     currency: CURRENCY_INR,
     scenarioTags: ['resolution-stress', band.name],
     forceLineItems: null,

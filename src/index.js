@@ -372,6 +372,11 @@ async function runStress(opts, outDir, now) {
   const docs = stats.manifest.map((row, i) => ({
     file: row.file,
     docType: truths[i].docType,
+    // Layout this vendor's doc was rendered with (per-vendor consistent;
+    // see layoutForVendor in generators/stress.js). Recorded so a failing
+    // sample's layout — which stresses extraction (OCR/table/bilingual) —
+    // is identifiable straight from the manifest.
+    layoutKey: orders[i].layoutKey,
     party: truths[i].party,
     lineItems: truths[i].lineItems,
   }));
