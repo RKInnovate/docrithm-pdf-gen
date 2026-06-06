@@ -7,6 +7,7 @@ out/
 out-stress/
 out-repro/
 test-sample/
+tally-masters.json
 
 # Vendored Devanagari TTFs MUST be committed so a fresh clone can
 # render the bilingual layout without network access. If any future
