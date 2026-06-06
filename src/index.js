@@ -32,11 +32,15 @@ import process from 'process';
 
 import { createRng } from './seedrand.js';
 import { planOrders, fillOrder } from './generators/orders.js';
+import { planStress, validateMasters, summariseTruths } from './generators/stress.js';
 import { loadCatalog, renderAll } from './render.js';
 import { LAYOUT_KEYS } from './layouts/index.js';
 
 // All known document types — default --types value and validation set.
 const ALL_TYPES = ['po', 'invoice'];
+
+// Default path to the Tally master export consumed by --stress.
+const DEFAULT_MASTERS = 'data/tally-masters.json';
 
 // Defaults. Centralised so --help and the parser stay in sync.
 const DEFAULTS = Object.freeze({
@@ -45,6 +49,8 @@ const DEFAULTS = Object.freeze({
   outDir: './out',
   types: ALL_TYPES.slice(),
   layouts: null, // null → all layouts eligible
+  stress: false,
+  masters: DEFAULT_MASTERS,
 });
 
 const PROGRESS_EVERY_DOCS = 50;
@@ -72,10 +78,18 @@ function helpText() {
     `  --types po,invoice   Document types to emit (default ${DEFAULTS.types.join(',')})`,
     `  --layouts a,b,c      Restrict to these layouts (default: all)`,
     `                       Known: ${LAYOUT_KEYS.join(', ')}`,
+    '  --stress             Resolution-stress mode: emit PO/invoice PDFs whose',
+    '                       party + line-item names are ADVERSARIAL variants of',
+    '                       real Tally masters, plus a ground-truth',
+    '                       out/stress-manifest.json. Reuses --count --seed',
+    '                       --out-dir --types --now.',
+    `  --masters PATH       Tally master export for --stress (default ${DEFAULT_MASTERS})`,
     '  -h, --help           Show this help and exit',
     '',
-    'Example:',
+    'Examples:',
     '  docrithm-pdf-gen --count 200 --seed 7 --types invoice --out-dir ./out',
+    '  docrithm-pdf-gen --stress --masters data/tally-masters.sample.json \\',
+    '                   --count 12 --seed 7 --out-dir ./out-stress',
   ].join('\n');
 }
 
@@ -107,6 +121,35 @@ function parseNow(raw) {
 }
 
 /**
+ * Load + parse the Tally master export for --stress. Returns the parsed
+ * object, or throws an actionable error when the file is missing or
+ * unreadable (validateMasters handles the empty-content case).
+ *
+ * @param {string} mastersPath - resolved absolute path
+ * @returns {Promise<object>} parsed masters JSON
+ */
+async function loadMasters(mastersPath) {
+  let raw;
+  try {
+    raw = await fs.readFile(mastersPath, 'utf8');
+  } catch (err) {
+    if (err.code === 'ENOENT') {
+      throw new Error(
+        `no Tally masters found at '${mastersPath}'. Run the master-export `
+          + `tool to produce data/tally-masters.json, or pass `
+          + `--masters data/tally-masters.sample.json to use the bundled fixture.`,
+      );
+    }
+    throw new Error(`cannot read masters at '${mastersPath}': ${err.message}`);
+  }
+  try {
+    return JSON.parse(raw);
+  } catch (err) {
+    throw new Error(`masters at '${mastersPath}' is not valid JSON: ${err.message}`);
+  }
+}
+
+/**
  * Parse `process.argv.slice(2)` into a flat options object. Throws on
  * syntactic problems; semantic validation is in `validateOptions`.
  *
@@ -121,6 +164,8 @@ function parseArgs(argv) {
     types: DEFAULTS.types.slice(),
     layouts: DEFAULTS.layouts,
     now: null,
+    stress: DEFAULTS.stress,
+    masters: DEFAULTS.masters,
     help: false,
   };
 
@@ -168,6 +213,12 @@ function parseArgs(argv) {
         break;
       case '--layouts':
         opts.layouts = consume().split(',').map((s) => s.trim()).filter(Boolean);
+        break;
+      case '--stress':
+        opts.stress = true;
+        break;
+      case '--masters':
+        opts.masters = consume();
         break;
       default:
         throw new Error(`unknown flag '${arg}'`);
@@ -261,6 +312,98 @@ function makeProgressLogger() {
 }
 
 /**
+ * Resolution-stress mode. Loads the Tally master export, plans `count`
+ * documents whose party + line-item names are adversarial variants of
+ * real masters, renders them through the normal PDF pipeline, and writes
+ * a ground-truth `stress-manifest.json` (per-doc intended masters +
+ * expected resolver outcomes, plus summary counts).
+ *
+ * @param {ReturnType<typeof parseArgs>} opts
+ * @param {string} outDir - resolved absolute output directory
+ * @param {Date} now - date anchor
+ * @returns {Promise<void>}
+ */
+async function runStress(opts, outDir, now) {
+  const rng = createRng(opts.seed);
+  const mastersPath = path.resolve(process.cwd(), opts.masters);
+
+  // Load + validate the master export (clear errors when missing/empty).
+  let masters;
+  try {
+    masters = validateMasters(await loadMasters(mastersPath), mastersPath);
+  } catch (err) {
+    fail(err.message);
+  }
+
+  process.stdout.write(
+    `docrithm-pdf-gen: STRESS seed=${opts.seed} count=${opts.count} `
+      + `now=${now.toISOString()} out=${outDir}\n`,
+  );
+  process.stdout.write(
+    `docrithm-pdf-gen: company='${masters.company}' `
+      + `ledgers=${masters.ledgers.length} stock=${masters.stock.length} `
+      + `types=${opts.types.join(',')}\n`,
+  );
+
+  // 1. Plan the adversarial documents + their ground truth.
+  const { orders, truths } = planStress({
+    rng,
+    masters,
+    count: opts.count,
+    now,
+    types: opts.types,
+  });
+  process.stdout.write(`docrithm-pdf-gen: planned ${orders.length} stress documents\n`);
+
+  // 2. Render through the existing pipeline (distorted strings ride in
+  //    the party-name / line-description fields the templates print).
+  const startedAt = Date.now();
+  const onProgress = makeProgressLogger();
+  let stats;
+  try {
+    stats = await renderAll(orders, outDir, { seed: opts.seed, onProgress });
+  } catch (err) {
+    fail(`render failed: ${err.message}`);
+  }
+
+  // 3. Build the ground-truth stress manifest. Each doc maps its shown
+  //    party + line items back to the intended master + expected outcome
+  //    so the resolution harness can be scored against truth.
+  const docs = stats.manifest.map((row, i) => ({
+    file: row.file,
+    docType: truths[i].docType,
+    party: truths[i].party,
+    lineItems: truths[i].lineItems,
+  }));
+  const summary = summariseTruths(truths);
+  const manifestDoc = {
+    company: masters.company,
+    count: stats.written,
+    seed: opts.seed,
+    mastersPath,
+    now: now.toISOString(),
+    description:
+      'Ground-truth map for DocRithm resolution-stress docs. For each PDF, '
+      + 'every shown party/line reference is mapped to the Tally master it '
+      + 'SHOULD resolve to + the expected resolver outcome. Score the harness '
+      + 'output against this.',
+    docs,
+    summary,
+  };
+  const manifestPath = path.join(outDir, 'stress-manifest.json');
+  await fs.writeFile(manifestPath, `${JSON.stringify(manifestDoc, null, 2)}\n`, 'utf8');
+
+  const elapsedSec = (Date.now() - startedAt) / 1000;
+  process.stdout.write('\n');
+  process.stdout.write(
+    `Done. Wrote ${formatInt(stats.written)} PDF(s) + stress-manifest.json to ${outDir}\n`,
+  );
+  process.stdout.write(`Elapsed: ${elapsedSec.toFixed(1)}s\n\n`);
+  process.stdout.write(`${asciiTable('By difficulty', summary.byDifficulty)}\n\n`);
+  process.stdout.write(`${asciiTable('By expected outcome', summary.byExpectedOutcome)}\n`);
+}
+
+/**
  * Main entry point.
  *
  * @returns {Promise<void>}
@@ -286,9 +429,17 @@ async function main() {
   }
 
   const outDir = path.resolve(process.cwd(), opts.outDir);
+  const now = opts.now ?? new Date();
+
+  // Resolution-stress mode is a separate pipeline (adversarial master
+  // variants + ground-truth manifest); dispatch and return early.
+  if (opts.stress) {
+    await runStress(opts, outDir, now);
+    return;
+  }
+
   const rng = createRng(opts.seed);
   const catalog = loadCatalog();
-  const now = opts.now ?? new Date();
 
   process.stdout.write(
     `docrithm-pdf-gen: seed=${opts.seed} count=${opts.count} now=${now.toISOString()} out=${outDir}\n`,

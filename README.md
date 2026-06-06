@@ -113,6 +113,31 @@ encoded into the filename:
 `missing-date`, `bilingual-devanagari` (Tally fuzzy-match stress), `faxed-scan`,
 `landscape`, and `dup-invoice-number` (two invoices sharing a number, applied cross-document).
 
+## Resolution-stress mode (`--stress`)
+
+Generates documents whose party + line-item names are **adversarial variants of
+REAL Tally masters**, to stress-test (and try to break) DocRithm's resolution
+harness. Each shown name is a distorted form of a known master; the harness must
+still map it back.
+
+```bash
+# 1. Export the real masters from the connected Tally (run with the app CLOSED —
+#    DuckDB single-writer lock). Tool lives in the DocRithm-wails repo:
+#      (cd ../DocRithm-wails && go run ./cmd/dump-masters)   # → data/tally-masters.json
+# 2. Generate the stress set:
+node src/index.js --stress --masters data/tally-masters.json --count 80 --seed 7 --out-dir ./out-stress
+#    (a bundled data/tally-masters.sample.json works without a live Tally)
+```
+
+The distortion catalog lives in `src/adversarial.js` (packaging/qty noise,
+legal-suffix churn, token reorder/initials, OCR-confusables, branch/numbered-office
+suffixes, Devanagari/transliteration, merge/split/truncate, …), each tagged with a
+`difficulty` (1=easy … 5=brutal) and an `expectedOutcome` (`resolved` /
+`ambiguous` / `unmatched`). The run writes `out-stress/stress-manifest.json` — the
+ground truth: for every doc, each reference's `shown` text, `intendedMaster`,
+`distortion`, `difficulty`, and `expectedOutcome` — so a resolver bench can diff
+the harness's actual output against what it *should* have done.
+
 ## Determinism
 
 Pure: no `Math.random`, no `Date.now()` inside generation. Thread a single `--now` anchor

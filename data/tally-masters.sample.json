@@ -1,0 +1,25 @@
+{
+  "_meta": {
+    "purpose": "Tiny hand-written fixture standing in for a real Tally master export (data/tally-masters.json). Lets the resolution-stress generator be developed and tested without the actual export. Shape matches the master-export tool: { company, ledgers[], stock[] }.",
+    "warning": "Synthetic. Names are realistic Indian B2B masters but fictitious; never load into a real Tally company.",
+    "fields": {
+      "ledgers": "Party / supplier ledgers. {name, parent_group, closing_balance}. Some share a base name across branch suffixes to exercise branch-collapse stress.",
+      "stock": "Stock items. {name, parent_group, aliases[], hsn_code, base_unit}. The product often lives in alias/parent, not the card name."
+    }
+  },
+  "company": "ACME AGENCIES",
+  "ledgers": [
+    { "name": "J.P.Impex - Mumbai", "parent_group": "Sundry Creditors", "closing_balance": -184320.5 },
+    { "name": "Shree Balaji Trading Co.", "parent_group": "Sundry Creditors", "closing_balance": -42600 },
+    { "name": "Anand Enterprises - Delhi", "parent_group": "Sundry Creditors", "closing_balance": -91250.75 },
+    { "name": "Krishna Steel & Hardware", "parent_group": "Sundry Creditors", "closing_balance": -267800 },
+    { "name": "Gupta Traders (Surat)", "parent_group": "Sundry Creditors", "closing_balance": -15890.25 }
+  ],
+  "stock": [
+    { "name": "Fortune Wheat Atta", "parent_group": "Atta & Flour", "aliases": ["Fortune Chakki Atta", "Fortune Atta"], "hsn_code": "11010000", "base_unit": "Kg" },
+    { "name": "Tata Salt", "parent_group": "Salt & Spices", "aliases": ["Tata Namak", "Tata Iodised Salt"], "hsn_code": "25010020", "base_unit": "Kg" },
+    { "name": "Solvent", "parent_group": "Chemicals", "aliases": ["LCl", "Liquid Chlorine"], "hsn_code": "28011000", "base_unit": "Ltr" },
+    { "name": "Amul Butter", "parent_group": "Dairy", "aliases": ["Amul Makhan"], "hsn_code": "04051000", "base_unit": "Pkt" },
+    { "name": "Surf Excel Detergent", "parent_group": "Detergents", "aliases": ["Surf Excel Easy Wash", "Surf Excel Powder"], "hsn_code": "34022090", "base_unit": "Pkt" }
+  ]
+}

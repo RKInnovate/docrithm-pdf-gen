@@ -4,6 +4,7 @@ node_modules/
 # Generated PDF output — many files per run, multi-MB total.
 # Regenerate locally; never commit.
 out/
+out-stress/
 out-repro/
 test-sample/
 
