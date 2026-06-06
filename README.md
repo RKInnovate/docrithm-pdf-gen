@@ -39,6 +39,8 @@ Usage: docrithm-pdf-gen [options]
   --out-dir PATH       Output directory (default ./out)
   --types po,invoice   Document types to emit (default po,invoice)
   --layouts a,b,c      Restrict to these layouts (default: all)
+  --image-ratio R      (--stress) fraction 0..1 of docs emitted as image-only
+                       scans — no text layer, forces OCR (default 0.15)
   -h, --help           Show this help and exit
 ```
 
@@ -128,6 +130,22 @@ still map it back.
 node src/index.js --stress --masters data/tally-masters.json --count 80 --seed 7 --out-dir ./out-stress
 #    (a bundled data/tally-masters.sample.json works without a live Tally)
 ```
+
+### Layout spread + image-only scans
+
+Stress docs now also vary **visual layout** (previously all `clean-modern`): the
+layout is derived deterministically from the *intended* ledger master, so each
+fictitious vendor consistently prints on its own template while the set spreads
+across all 7 layouts — exercising extraction (OCR, table shapes, bilingual labels)
+on top of the name distortions. Each doc's `layoutKey` is recorded in the manifest.
+
+A fraction (`--image-ratio`, default **0.15**) are emitted as **image-only PDFs**:
+the page is rasterized to a 150-DPI bitmap with **no text layer**, so `pypdf` /
+`pdftotext` extract nothing and the consumer is forced down its **OCR** path. These
+are tagged `image-only-ocr` and marked `"rendering": "image"` in the manifest.
+Rasterization uses poppler's `pdftoppm`/`pdftocairo` (self-contained, no ghostscript);
+if neither is on PATH the run degrades gracefully to vector PDFs with a warning
+(`brew install poppler` to enable). Reruns stay byte-identical.
 
 The distortion catalog lives in `src/adversarial.js` (packaging/qty noise,
 legal-suffix churn, token reorder/initials, OCR-confusables, branch/numbered-office

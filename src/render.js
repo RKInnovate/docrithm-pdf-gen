@@ -47,6 +47,12 @@ import PdfPrinter from 'pdfmake';
 
 import { buildDocDefinition as buildPurchaseOrder } from './templates/purchase-order.js';
 import { buildDocDefinition as buildPurchaseInvoice } from './templates/purchase-invoice.js';
+import {
+  detectRasterizer,
+  docToBuffer,
+  pdfToImageOnlyPdf,
+  DEFAULT_IMAGE_DPI,
+} from './rasterize.js';
 
 // `createRequire` gives us a CommonJS-style `require` inside ESM; used
 // only for `require.resolve` / loading pdfmake's VFS, the reliable way
@@ -272,9 +278,12 @@ export function makeFilename(order, seed, seq) {
  * @param {PdfPrinter} printer - shared printer
  * @param {number} seed - run seed (for the filename)
  * @param {number} seq - run-unique sequence (for the filename)
+ * @param {object} [imageOpts] - image-only rendering controls:
+ *   { rasterizer, dpi } — when `order.imageOnly` and a rasterizer is
+ *   present, the page is re-emitted as a text-layer-free scan (forces OCR).
  * @returns {Promise<string>} absolute path to the written `.pdf`
  */
-export async function renderOne(order, outDir, printer, seed, seq) {
+export async function renderOne(order, outDir, printer, seed, seq, imageOpts = {}) {
   const buildDocDefinition = templateFor(order.docType);
   const docDefinition = buildDocDefinition(order);
 
@@ -285,6 +294,22 @@ export async function renderOne(order, outDir, printer, seed, seq) {
   const fullPath = path.resolve(outDir, filename);
 
   await fsPromises.mkdir(outDir, { recursive: true });
+
+  // Image-only (scanned) path: render the vector PDF to a buffer, then
+  // rasterize + rewrap so the file carries no text layer and the consumer
+  // must OCR it. Only when the order opts in AND a rasterizer is available.
+  if (order.imageOnly && imageOpts.rasterizer) {
+    const vector = await docToBuffer(printer, docDefinition);
+    const imagePdf = await pdfToImageOnlyPdf(vector, {
+      printer,
+      rasterizer: imageOpts.rasterizer,
+      dpi: imageOpts.dpi ?? DEFAULT_IMAGE_DPI,
+      creationDate: order.orderDate,
+      tmpTag: `${seed}-${seq}`,
+    });
+    await fsPromises.writeFile(fullPath, imagePdf);
+    return fullPath;
+  }
 
   return new Promise((resolve, reject) => {
     let settled = false;
@@ -315,11 +340,29 @@ export async function renderOne(order, outDir, printer, seed, seq) {
  * @param {object} opts
  * @param {number} opts.seed - run seed (encoded in filenames + manifest)
  * @param {(progress:{done:number,total:number}) => void} [opts.onProgress]
- * @returns {Promise<{written:number, byType:object, byVendor:object, byLayout:object, byScenario:object, manifest:object[]}>}
+ * @param {number} [opts.imageDpi] - DPI for image-only (scanned) docs
+ * @returns {Promise<{written:number, imageWritten:number, byType:object, byVendor:object, byLayout:object, byScenario:object, manifest:object[]}>}
  */
 export async function renderAll(orders, outDir, opts) {
-  const { seed, onProgress } = opts;
+  const { seed, onProgress, imageDpi } = opts;
   const printer = createPrinter();
+
+  // Detect a rasterizer once if any order wants image-only output. If none
+  // is on PATH, warn a single time and fall back to vector PDFs so the run
+  // still completes (the OCR-stress subset just won't be image-backed).
+  const wantsImages = orders.some((o) => o.imageOnly);
+  const rasterizer = wantsImages ? detectRasterizer() : null;
+  if (wantsImages && !rasterizer) {
+    console.warn(
+      'docrithm-pdf-gen: image-only (scanned) docs were requested but no PDF '
+        + 'rasterizer (pdftoppm / pdftocairo from poppler) is on PATH. Those '
+        + 'docs will be emitted as normal vector PDFs WITH a text layer — they '
+        + 'will NOT force OCR. Install poppler (macOS: brew install poppler) '
+        + 'and re-run to get true image-only scans.',
+    );
+  }
+  const imageOpts = { rasterizer, dpi: imageDpi };
+  let imageWritten = 0;
 
   const byType = Object.create(null);
   const byVendor = Object.create(null);
@@ -336,12 +379,16 @@ export async function renderAll(orders, outDir, opts) {
     // both for the filename collision tiebreaker and manifest ordering.
     // eslint-disable-next-line no-await-in-loop -- batches are sequential by design
     const paths = await Promise.all(
-      batch.map((order, k) => renderOne(order, outDir, printer, seed, i + k + 1)),
+      batch.map((order, k) => renderOne(order, outDir, printer, seed, i + k + 1, imageOpts)),
     );
 
     batch.forEach((order, k) => {
       const seq = i + k + 1;
       const file = path.basename(paths[k]);
+      // Actual rendering kind: image-only only when requested AND a
+      // rasterizer was present; otherwise it fell back to vector.
+      const rendering = order.imageOnly && rasterizer ? 'image' : 'vector';
+      if (rendering === 'image') imageWritten += 1;
 
       byType[order.docType] = (byType[order.docType] ?? 0) + 1;
       byVendor[order.vendor.slug] = (byVendor[order.vendor.slug] ?? 0) + 1;
@@ -357,6 +404,9 @@ export async function renderAll(orders, outDir, opts) {
         vendor: order.vendor.slug,
         buyer: order.buyer.slug,
         layoutKey: order.layoutKey,
+        // 'image' = rasterized scan (no text layer, OCR required);
+        // 'vector' = normal text-bearing PDF.
+        rendering,
         scenarioTags: order.scenarioTags.slice(),
         seed,
         seq,
@@ -377,5 +427,5 @@ export async function renderAll(orders, outDir, opts) {
     if (onProgress) onProgress({ done: written, total: orders.length });
   }
 
-  return { written, byType, byVendor, byLayout, byScenario, manifest };
+  return { written, imageWritten, byType, byVendor, byLayout, byScenario, manifest };
 }

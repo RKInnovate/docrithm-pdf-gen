@@ -411,6 +411,9 @@ function planStressDoc({ rng, masters, docType, now, sequence, forced = {} }) {
     // table shapes, bilingual labels) on top of the name distortions.
     layoutKey: layoutForVendor(ledger.name),
     currency: CURRENCY_INR,
+    // Default vector (text-bearing); planStress may flip a subset to true
+    // so they render as image-only scans (forces OCR). See planStress.
+    imageOnly: false,
     scenarioTags: ['resolution-stress', band.name],
     forceLineItems: null,
     injectZeroLine: false,
@@ -445,9 +448,13 @@ function planStressDoc({ rng, masters, docType, now, sequence, forced = {} }) {
  * @param {number} args.count - number of documents to plan
  * @param {Date} args.now - date anchor (all dates measured back from it)
  * @param {Array<'po'|'invoice'>} args.types - allowed doc types
+ * @param {number} [args.imageRatio=0] - fraction of docs (0..1) to mark
+ *   as image-only scans (no text layer → forces server OCR instead of
+ *   pypdf text extraction). The selection is spread evenly across the
+ *   population so it spans difficulties + layouts.
  * @returns {{orders:object[], truths:object[]}}
  */
-export function planStress({ rng, masters, count, now, types }) {
+export function planStress({ rng, masters, count, now, types, imageRatio = 0 }) {
   const orders = [];
   const truths = [];
   let sequence = 0;
@@ -496,6 +503,22 @@ export function planStress({ rng, masters, count, now, types }) {
   // -- Remaining documents: weighted-difficulty random population --
   while (orders.length < count) {
     pushDoc();
+  }
+
+  // -- Image-only (scanned) subset --
+  // Mark an evenly-spread fraction as image-only so the set also exercises
+  // the OCR path (text-layer-free scans). Spacing by stride keeps the
+  // selection deterministic and spanning every difficulty/layout without
+  // consuming `rng` draws (so distortion streams stay seed-stable). The
+  // actual rasterization happens in render.js / rasterize.js.
+  const nImage = Math.min(orders.length, Math.round(orders.length * imageRatio));
+  for (let k = 0; k < nImage; k += 1) {
+    const idx = Math.floor((k + 0.5) * (orders.length / nImage));
+    const o = orders[idx];
+    if (o && !o.imageOnly) {
+      o.imageOnly = true;
+      o.scenarioTags.push('image-only-ocr');
+    }
   }
 
   return { orders, truths };

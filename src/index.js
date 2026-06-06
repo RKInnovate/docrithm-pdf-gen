@@ -51,6 +51,9 @@ const DEFAULTS = Object.freeze({
   layouts: null, // null → all layouts eligible
   stress: false,
   masters: DEFAULT_MASTERS,
+  // Fraction of --stress docs emitted as image-only scans (no text layer →
+  // forces server OCR). Stress-mode only; ignored without --stress.
+  imageRatio: 0.15,
 });
 
 const PROGRESS_EVERY_DOCS = 50;
@@ -84,6 +87,11 @@ function helpText() {
     '                       out/stress-manifest.json. Reuses --count --seed',
     '                       --out-dir --types --now.',
     `  --masters PATH       Tally master export for --stress (default ${DEFAULT_MASTERS})`,
+    `  --image-ratio R      Fraction (0..1) of --stress docs emitted as`,
+    `                       image-only scans (no text layer → forces OCR`,
+    `                       instead of pypdf). Default ${DEFAULTS.imageRatio}. Needs`,
+    `                       poppler (pdftoppm) on PATH; falls back to vector`,
+    `                       with a warning if absent.`,
     '  -h, --help           Show this help and exit',
     '',
     'Examples:',
@@ -166,6 +174,7 @@ function parseArgs(argv) {
     now: null,
     stress: DEFAULTS.stress,
     masters: DEFAULTS.masters,
+    imageRatio: DEFAULTS.imageRatio,
     help: false,
   };
 
@@ -220,6 +229,9 @@ function parseArgs(argv) {
       case '--masters':
         opts.masters = consume();
         break;
+      case '--image-ratio':
+        opts.imageRatio = Number(consume());
+        break;
       default:
         throw new Error(`unknown flag '${arg}'`);
     }
@@ -239,6 +251,9 @@ function validateOptions(opts) {
   }
   if (!Number.isInteger(opts.seed)) {
     throw new Error(`--seed must be an integer (got ${opts.seed})`);
+  }
+  if (!Number.isFinite(opts.imageRatio) || opts.imageRatio < 0 || opts.imageRatio > 1) {
+    throw new Error(`--image-ratio must be a number in [0,1] (got ${opts.imageRatio})`);
   }
   if (!Array.isArray(opts.types) || opts.types.length === 0) {
     throw new Error('--types must list at least one of: po, invoice');
@@ -352,8 +367,13 @@ async function runStress(opts, outDir, now) {
     count: opts.count,
     now,
     types: opts.types,
+    imageRatio: opts.imageRatio,
   });
-  process.stdout.write(`docrithm-pdf-gen: planned ${orders.length} stress documents\n`);
+  const plannedImages = orders.filter((o) => o.imageOnly).length;
+  process.stdout.write(
+    `docrithm-pdf-gen: planned ${orders.length} stress documents `
+      + `(${plannedImages} image-only / OCR)\n`,
+  );
 
   // 2. Render through the existing pipeline (distorted strings ride in
   //    the party-name / line-description fields the templates print).
@@ -377,6 +397,10 @@ async function runStress(opts, outDir, now) {
     // sample's layout — which stresses extraction (OCR/table/bilingual) —
     // is identifiable straight from the manifest.
     layoutKey: orders[i].layoutKey,
+    // 'image' = rasterized scan (no text layer → OCR required) as actually
+    // emitted by renderAll (falls back to 'vector' if no rasterizer); lets
+    // a bench know which docs deliberately defeat pypdf text extraction.
+    rendering: row.rendering,
     party: truths[i].party,
     lineItems: truths[i].lineItems,
   }));
@@ -384,6 +408,7 @@ async function runStress(opts, outDir, now) {
   const manifestDoc = {
     company: masters.company,
     count: stats.written,
+    imageOnlyCount: stats.imageWritten,
     seed: opts.seed,
     mastersPath,
     now: now.toISOString(),
@@ -401,7 +426,9 @@ async function runStress(opts, outDir, now) {
   const elapsedSec = (Date.now() - startedAt) / 1000;
   process.stdout.write('\n');
   process.stdout.write(
-    `Done. Wrote ${formatInt(stats.written)} PDF(s) + stress-manifest.json to ${outDir}\n`,
+    `Done. Wrote ${formatInt(stats.written)} PDF(s) `
+      + `(${formatInt(stats.imageWritten)} image-only / OCR) `
+      + `+ stress-manifest.json to ${outDir}\n`,
   );
   process.stdout.write(`Elapsed: ${elapsedSec.toFixed(1)}s\n\n`);
   process.stdout.write(`${asciiTable('By difficulty', summary.byDifficulty)}\n\n`);
